@@ -22,9 +22,6 @@ from deep_sort.detection import Detection as ddet
 from collections import deque
 from keras import backend
 
-# os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"]="1"
-
 backend.clear_session()
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--input",help="path to input video", default = "input_data/CH6_preset1_sample.avi")
@@ -40,6 +37,7 @@ warnings.filterwarnings('ignore')
 np.random.seed(100)
 COLORS = np.random.randint(0, 255, size=(200, 3), dtype="uint8")
 
+# Define the channel number
 ch = 4
 # convert pixel to global
 if ch == 8:
@@ -67,12 +65,11 @@ if ch == 8:
         Rx2 = ((-6.18533090e-03*x2)+(-7.54458945e-02*y2) +3.72904094e+01)/w2
         Ry2 = ((-2.10876492e-02 *x2) +(-2.57207363e-01 * y2) + 1.27126007e+02)/w2
         
-
-
         x_distance = (abs(Rx1-Rx2) * 100000 *1.1 ) #보정
         y_distance = (abs(Ry1-Ry2) * 100000 *0.9)
         R_dist = math.sqrt(x_distance*x_distance + y_distance*y_distance)
         return R_dist
+    
 elif ch == 4:
     # convert pixel to global
     def convPtoR_1(x1,y1,x2,y2) :
@@ -99,13 +96,11 @@ elif ch == 4:
         Rx2 = ((5.04663096e-03*x2)+(-1.35574220e-01*y2) +3.72911979e+01)/w2
         Ry2 = ((1.72008339e-02 *x2) +(-4.62122992e-01 * y2) + 1.27110210e+02)/w2
         
-
-
         x_distance = (abs(Rx1-Rx2) * 100000 *1.1 ) #보정
         y_distance = (abs(Ry1-Ry2) * 100000 *0.9)
         R_dist = math.sqrt(x_distance*x_distance + y_distance*y_distance)
         return R_dist
-########## added by swhan ##########
+    
 lk_params = dict( winSize  = (13, 13),
                   maxLevel = 2,
                   criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
@@ -114,7 +109,8 @@ feature_params = dict( maxCorners = 500,
                        qualityLevel = 0.3,
                        minDistance = 7,
                        blockSize = 7 )
-####################################
+
+################# parameters ######################
 preset = 1
 p1_flag = False
 p2_flag = False
@@ -147,10 +143,11 @@ speed_lane_3 = []
 speed_lane_4 = []
 speed_lane_5 = []
 speed_lane_6 = []
+##################################################
 
-
+# visualization part
 if ch == 8:
-    # ch8_p1
+    # preset 1
     p1_vline1 = [(359,338), (794,314)]
     p1_mid_line = [(324,485), (1007,445)]
     p1_vline2 = [(86,1447), (1076,1364)]
@@ -168,24 +165,8 @@ if ch == 8:
 
     # read global point file
     f = open('input_data/CCTV8_PRESET1.txt', 'r')
-    lines = f.readlines()
-
-    #작은 노란점들? 마커 좌표 저장
-    for line in lines:
-        x = line.split(',')[0]
-        y = line.split(',')[1]
-        y = y.split('\n')[0]
-
-        x = int(x)
-        y = int(y)
-
-        if x >= 0 and y >= 0:
-            p1_global_point.append((x,y))
-    f.close()
-
-    
-
-    # p2
+ 
+    # preset 2
     p2_vline1 = [(232,843), (967,806)]
     p2_mid_line = [(188,1015), (1076,973)]
     p2_vline2 = [(41,1502), (1076,1472)]
@@ -247,6 +228,7 @@ elif ch == 4:
     f = open('input_data/CCTV8_PRESET2.txt', 'r')
     lines = f.readlines()
 
+# save the global points
 for line in lines:
     x = line.split(',')[0]
     y = line.split(',')[1]
@@ -267,6 +249,7 @@ p1_lane_3 = p1_lane_3.reshape((-1, 1, 2))
 p1_lane_4 = p1_lane_4.reshape((-1, 1, 2))
 p1_lane_5 = p1_lane_5.reshape((-1, 1, 2))
 p1_lane_6 = p1_lane_6.reshape((-1, 1, 2))
+
 # reshape
 p2_mask = p2_mask.reshape((-1, 1, 2))
 p2_lane_1 = p2_lane_1.reshape((-1, 1, 2))
@@ -280,16 +263,12 @@ def check_vline(p1, p2, w):
     x = (p2[0]-p1[0])*(w[1]-p1[1])-(w[0]-p1[0])*(p2[1]-p1[1])
     return x
 
-
-#####################여기부터 수정하면 될듯하다 #######################################################################
-#################################################################################################################
 def main(yolo):
     global p1_flag, p2_flag, vline1, mid_line, vline2, lane_1, lane_2, lane_3, lane_4, lane_5, lane_6, mask, preset
     global cnt_lane_1, cnt_lane_2, cnt_lane_3, cnt_lane_4, cnt_lane_5, cnt_lane_6, global_point
     global speed_lane_1, speed_lane_2, speed_lane_3, speed_lane_4, speed_lane_5, speed_lane_6
 
-    # Definition of the parameters
-    ########## added by swhan ##########
+    ################# parameters ######################
     track_len = 2
     detect_interval = 4
     of_track = []
@@ -301,15 +280,15 @@ def main(yolo):
     prv1, prv2, prv3, prv4, prv5, prv6 = 0, 0, 0, 0, 0, 0
     ms2kmh = 3.6
     fps = 30
-    ####################################
     
     max_cosine_distance = 0.5
     nn_budget = None
     nms_max_overlap = 0.3
-
+    
     counter = []
+    ##################################################
 
-    #deep_sort
+    # Deep SORT
     model_filename = 'model_data/market1501.pb'
     encoder = gdet.create_box_encoder(model_filename,batch_size=1)
 
@@ -321,12 +300,11 @@ def main(yolo):
     video_capture = cv2.VideoCapture(args["input"])
 
     if writeVideo_flag:
-    # Define the codec and create VideoWriter object
+        # Define the codec and create VideoWriter object
         w = int(video_capture.get(3))
         h = int(video_capture.get(4))
         total_frame = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
         fourcc = cv2.VideoWriter_fourcc(*'FMP4')
-        # fourcc = cv2.VideoWriter_fourcc('X', 'V', 'I', 'D')
         video_fps = video_capture.get(cv2.CAP_PROP_FPS)
         out = cv2.VideoWriter('output/CH4_output.avi', fourcc, video_fps, (w, h))
         list_file = open('detection.txt', 'w')
@@ -336,16 +314,15 @@ def main(yolo):
     frame_idx = 0
     speed_dict = OrderedDict()
 
-    ########## added by swhan ##########
     ret, first_frame = video_capture.read()  
     cal_mask1 = np.zeros_like(first_frame[:, :, 0])
     cal_mask2 = np.zeros_like(first_frame[:, :, 0])
-    ####################################
+
     while True:
         ret, frame = video_capture.read()  
         glob = frame.copy()
         cmask = frame.copy()
-        ########## added by swhan ##########    
+        
         # Channel and preset setting
         if ch == 8:
             if 0 <= frame_idx <= 480 or 2415 <= frame_idx <= 4203 or 6140 <=frame_idx<=7925 or 9864 <=frame_idx<=11648 or 13585 <= frame_idx <= 15370 or frame_idx >=17306:
@@ -583,14 +560,13 @@ def main(yolo):
         
         cnt_lane_1 = cnt_lane_2 = cnt_lane_3 = cnt_lane_4 = cnt_lane_5 = cnt_lane_6 = 0
 
-        # image = Image.fromarray(frame)
         image = Image.fromarray(frame[...,::-1]) #bgr to rgb
         boxs,class_names = yolo.detect_image(image)
         
         #features is 128-dimension vector for each bounding box
         features = encoder(frame,boxs)        
         
-        # score to 1.0 here).
+        # score to 1.0 here.
         # score 1.0 means that bbox's class score after yolo is 100%
         detections = [Detection(bbox, 1.0, feature) for bbox, feature in zip(boxs, features)]
 
@@ -603,7 +579,7 @@ def main(yolo):
         # it may contain many bbox or no bbox
         detections = [detections[i] for i in indices]
 
-         # calculate lane by lane avg speed
+        # calculate lane by lane avg speed
         ## swhan method (optical flow)
         mm1, mm2, mm3, mm4, mm5, mm6 = 0, 0, 0, 0, 0,0
 
@@ -761,7 +737,6 @@ def main(yolo):
         
         ptn1, ptn2, ptn3, ptn4, ptn5, ptn6 = 0, 0, 0, 0, 0, 0
 
-        
         # Call the tracker
         tracker.predict()
         tracker.update(detections)
@@ -777,7 +752,7 @@ def main(yolo):
         for track in tracker.tracks:
             if not track.is_confirmed() or track.time_since_update > 1:
                 continue
-            #boxes.append([track[0], track[1], track[2], track[3]])
+
             indexIDs.append(int(track.track_id))
             counter.append(int(track.track_id))
             bbox = track.to_tlbr()
@@ -791,7 +766,6 @@ def main(yolo):
             i += 1
             center = (int(((bbox[0])+(bbox[2]))/2),int(((bbox[1])+(bbox[3]))/2))
             
-            ###################################이부분에서 픽셀좌표 -> 글로벌 좌표로 변환한다.
             # global point matching
             track.matching_point[0] = center[0]
             track.matching_point[1] = center[1]
@@ -799,7 +773,6 @@ def main(yolo):
             temp_list = [track.matching_point[0],track.matching_point[1],frame_idx]
 
             if len(track.matching_point_list) == 4:
-                # print("2222")
                 track.matching_point_list.append(temp_list)
 
                 x1 = track.matching_point_list[0][0]
@@ -807,7 +780,7 @@ def main(yolo):
                 x2 = track.matching_point_list[-1][0]
                 y2 = track.matching_point_list[-1][1]
             
-                # 픽셀변화 없을때 속도 0으로 할것
+                # If the pixel don't change, the speed should be zero.
                 if x1 == x2 and y1 == y2:
                     track.matching_point_list.pop(0)
                 else:
@@ -817,7 +790,7 @@ def main(yolo):
                     if preset == 1:
                         R_dist1 = convPtoR_1(x1,y1,x2,y2)
                         t_time1 = (time2-time1)/30
-                        speed = int(3.6*R_dist1 //t_time1) # 4/30초마다 체크 ... (3600sec/hour) / (1000 km/m) /(4/30sec) = 27Km/hour
+                        speed = int(3.6*R_dist1 //t_time1)
                         #print("time1 : ",time1, "time2 : ",time2)
 
                     elif preset == 2:
@@ -826,24 +799,16 @@ def main(yolo):
                         speed = int(3.6*R_dist1 //t_time1)
                         #print("time1 : ",time1, "time2 : ",time2)
                                        
-                # 역주행 검출
-                # 현재 프레임에서 검출된 좌표가 이전 , 전전 , 전전전 검출된 프레임의 좌표보다 작은경우 역주행으로 판단
-                # if (y2-y1)<0 and (y3-y1)<0 and (y4-y1)<0 :
-                #     print("reverse driving!\n")
-                #     track.speed = (-1 )* track.speed
-                # print(track.speed)
                 track.matching_point_list.pop(0)
                 if frame_idx % 6 ==1 :
                     track.speed = speed
                 cv2.putText(frame, str(int(track.speed))+'km/h', (int(bbox[0]), int(bbox[1]+((bbox[3]-bbox[1])/2))),cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 4)
-                    # print(f'track.matching_point_list{track.matching_point_list}')
             elif len(track.matching_point_list) == 0 :
                 track.matching_point_list.append(temp_list)
             elif track.matching_point_list[-1][0] != track.matching_point[0] and track.matching_point_list[-1][1] != track.matching_point[1]: 
                 track.matching_point_list.append(temp_list)
 
             cv2.circle(frame, (track.matching_point[0], track.matching_point[1]), 5, (0,0,255),-1)
-            # ###############################################################################################################
             
             # traffic lane by lane
             if cv2.pointPolygonTest(lane_1, center, False) >= 0:
@@ -883,51 +848,6 @@ def main(yolo):
                 cv2.line(frame,(pts[track.track_id][j-1]), (pts[track.track_id][j]),(color),thickness)
                 # cv2.putText(frame, str(class_names[j]),(int(bbox[0]), int(bbox[1] -20)),0, 5e-3 * 150, (255,255,255),2)
  
-            ########## added by swhan ##########
-            # if len(pts[track.track_id]) == 2:
-            #     #print(ctime[track.time][1]-ctime[track.time][0])
-            #     if preset == 1:
-            #         movement = convPtoR_1(pts[track.track_id][0][0],pts[track.track_id][0][1],pts[track.track_id][1][0],pts[track.track_id][1][1])           
-            #     elif preset == 2:
-            #         movement = convPtoR_2(pts[track.track_id][0][0],pts[track.track_id][0][1],pts[track.track_id][1][0],pts[track.track_id][1][1])           
-            #     #print("movement",movement)
-            #     track.speed = movement / (ctime[track.time][1]-ctime[track.time][0]) * ms2kmh
-            
-            # cv2.putText(frame,str(track.track_id),(center[0],center[1]),cv2.FONT_HERSHEY_SIMPLEX, 1, color, 1)
-            # cv2.putText(frame, str(int(track.speed))+'km/h', (int(bbox[0]), int(bbox[1]+((bbox[3]-bbox[1])//2))+50),cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2)
-            ####################################
-        
-        ## myeun oh lee method
-        # for track in tracker.tracks:
-        #     if track.driving_lane == 1 and track.speed >= 0 and track.speed <= 200:
-        #         speed_lane_1.append(track.speed)
-        #     elif track.driving_lane == 2 and track.speed >= 0 and track.speed <= 200:
-        #         speed_lane_2.append(track.speed)
-        #     elif track.driving_lane == 3 and track.speed >= 0 and track.speed <= 200:
-        #         speed_lane_3.append(track.speed)
-        #     elif track.driving_lane == 4 and track.speed >= 0 and track.speed <= 200:
-        #         speed_lane_4.append(track.speed)
-        #     elif track.driving_lane == 5 and track.speed >= 0 and track.speed <= 200:
-        #         speed_lane_5.append(track.speed)
-        #     elif track.driving_lane == 6 and track.speed >= 0 and track.speed <= 200:
-        #         speed_lane_6.append(track.speed)
-   
-        ## myeun oh lee method
-        # avg_speed_lane_1 = sum(speed_lane_1, 0.0) / len(speed_lane_1) if len(speed_lane_1) != 0 else -1
-        # avg_speed_lane_2 = sum(speed_lane_2, 0.0) / len(speed_lane_2) if len(speed_lane_2) != 0 else -1
-        # avg_speed_lane_3 = sum(speed_lane_3, 0.0) / len(speed_lane_3) if len(speed_lane_3) != 0 else -1
-        # avg_speed_lane_4 = sum(speed_lane_4, 0.0) / len(speed_lane_4) if len(speed_lane_4) != 0 else -1
-        # avg_speed_lane_5 = sum(speed_lane_5, 0.0) / len(speed_lane_5) if len(speed_lane_5) != 0 else -1
-        # avg_speed_lane_6 = sum(speed_lane_6, 0.0) / len(speed_lane_6) if len(speed_lane_6) != 0 else -1
-        # speed_lane_1.clear()
-        # speed_lane_2.clear()
-        # speed_lane_3.clear()
-        # speed_lane_4.clear()
-        # speed_lane_5.clear()
-        # speed_lane_6.clear()
-
-        
-        
         cv2.putText(frame, "Current Object Counter: "+str(i),(int(20), int(80)),0, 5e-3 * 200, (0,255,0),2)
         cv2.putText(frame, "FPS: %f"%(fps),(int(20), int(40)),0, 5e-3 * 200, (0,255,0),3)
 
